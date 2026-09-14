@@ -1,0 +1,19 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Blue Charm Beacon",
+        "data": {
+          "name": "Device Name",
+          "address": "Bluetooth MAC Address"
+        }
+      }
+    },
+    "error": {
+      "invalid_mac": "Please enter a valid 17-character MAC address (e.g., AA:BB:CC:DD:EE:FF)"
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  }
+}
