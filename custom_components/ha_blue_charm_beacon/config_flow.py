@@ -1,25 +1,35 @@
 from __future__ import annotations
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant
+import voluptuous as vol
+from homeassistant import config_entries
+from homeassistant.data_entry_flow import FlowResult
 
 from .const import DOMAIN
 
-# List the platforms that this integration supports
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+class BlueCharmConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for HA Blue Charm Beacon."""
 
+    VERSION = 1
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up HA Blue Charm Beacon from a config entry."""
-    hass.data.setdefault(DOMAIN, {})
+    async def async_step_user(self, user_input: dict | None = None) -> FlowResult:
+        """Handle the initial step."""
+        errors: dict[str, str] = {}
 
-    # Forward the config entry to the sensor platform
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        if user_input is not None:
+            return self.async_create_entry(
+                title=user_input.get("name", "Blue Charm Beacon"),
+                data=user_input,
+            )
 
-    return True
+        data_schema = vol.Schema(
+            {
+                vol.Required("name", default="Cat Beacon"): str,
+                vol.Required("address"): str,
+            }
+        )
 
-
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+        return self.async_show_form(
+            step_id="user",
+            data_schema=data_schema,
+            errors=errors,
+        )
