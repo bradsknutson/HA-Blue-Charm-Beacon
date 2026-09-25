@@ -1,13 +1,13 @@
 {
   "domain": "ha_blue_charm_beacon",
-  "name": "HA Blue Charm Beacon",
+  "name": "Blue Charm Beacon",
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["bluetooth"],
   "documentation": "https://github.com/bradsknutson/HA-Blue-Charm-Beacon",
   "issue_tracker": "https://github.com/bradsknutson/HA-Blue-Charm-Beacon/issues",
   "iot_class": "local_push",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "bluetooth": [
     {
       "connectable": false
