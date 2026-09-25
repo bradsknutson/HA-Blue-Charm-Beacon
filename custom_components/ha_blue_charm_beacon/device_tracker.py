@@ -7,7 +7,6 @@ from homeassistant.components.bluetooth import (
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
     async_register_callback,
-    async_address_present,
 )
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
@@ -44,7 +43,9 @@ class BlueCharmTracker(TrackerEntity):
         self._address = address.lower()
         self._attr_unique_id = f"{address}_tracker"
         self._attr_source_type = SourceType.BLUETOOTH
-        self._attr_is_connected = True
+        
+        # Connection-based trackers report 'home' when connected
+        self._attr_is_connected = False
         
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
@@ -54,6 +55,11 @@ class BlueCharmTracker(TrackerEntity):
             connections={(CONNECTION_BLUETOOTH, address.lower())},
         )
 
+    @property
+    def state(self) -> str:
+        """Return the state of the device tracker."""
+        return "home" if self._attr_is_connected else "not_home"
+
     async def async_added_to_hass(self) -> None:
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
@@ -62,16 +68,10 @@ class BlueCharmTracker(TrackerEntity):
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Update connection state and check core tracking presence."""
-            if service_info.address.lower() == self._address:
-                is_present = async_address_present(self.hass, self._address, connectable=False)
+            """Update connection state when advertisement is caught."""
+            if service_info.address and service_info.address.lower() == self._address:
+                _LOGGER.error("TRACKER_HIT: Heard beacon %s", service_info.address)
                 
-                _LOGGER.debug(
-                    "TRACKER_DIAGNOSTIC: address %s present in core manager: %s",
-                    self._address,
-                    is_present,
-                )
-
                 if not self._attr_is_connected:
                     self._attr_is_connected = True
                     self.async_write_ha_state()
