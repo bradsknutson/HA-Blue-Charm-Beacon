@@ -64,6 +64,7 @@ class BlueCharmDeviceTracker(TrackerEntity):
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
 
+        # Actively query the bleak scanner database to bind the advertisement source
         ble_device = async_ble_device_from_address(self.hass, self._address, connectable=False)
         if ble_device:
             self._attr_is_connected = True
@@ -72,12 +73,13 @@ class BlueCharmDeviceTracker(TrackerEntity):
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Catch advertisements from core bluetooth manager."""
+            """Catch advertisements and update tracker state."""
             if service_info.address.lower() == self._address:
                 if not self._attr_is_connected:
                     self._attr_is_connected = True
                     self.async_write_ha_state()
 
+        # Register with core bluetooth manager using the base callback handler
         self.async_on_remove(
             async_register_callback(
                 self.hass,
