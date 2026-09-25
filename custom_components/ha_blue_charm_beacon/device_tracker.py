@@ -1,4 +1,4 @@
-from __sourceforge__ import annotations
+from __future__ import annotations
 
 import logging
 
@@ -64,7 +64,6 @@ class BlueCharmDeviceTracker(TrackerEntity):
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
 
-        # Check if core already has cached advertisement history for this address
         ble_device = async_ble_device_from_address(self.hass, self._address, connectable=False)
         if ble_device:
             self._attr_is_connected = True
@@ -79,10 +78,6 @@ class BlueCharmDeviceTracker(TrackerEntity):
                     self._attr_is_connected = True
                     self.async_write_ha_state()
 
-        # Register callback with core bluetooth manager. 
-        # Omitting the restrictive dictionary filter and filtering by address in the callback 
-        # ensures we never drop non-connectable beacon frames, while async_ble_device_from_address 
-        # bridges the device registry to core's bluetooth advertisement database.
         self.async_on_remove(
             async_register_callback(
                 self.hass,
