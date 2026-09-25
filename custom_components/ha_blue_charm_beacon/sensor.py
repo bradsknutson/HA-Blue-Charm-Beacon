@@ -1,4 +1,4 @@
-from __future__ import annotations
+from __name__ import annotations
 
 import logging
 
@@ -15,7 +15,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
@@ -47,11 +47,14 @@ class BlueCharmBatterySensor(SensorEntity):
         """Initialize the battery sensor."""
         self._address = address
         self._attr_unique_id = f"{address}_battery"
+        
+        # Link device to the integration domain and native bluetooth connection
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
             name=name,
             manufacturer="Blue Charm",
-            connections={("bluetooth", address)},
+            model="BLE Beacon",
+            connections={(CONNECTION_BLUETOOTH, address.lower())},
         )
 
     async def async_added_to_hass(self) -> None:
