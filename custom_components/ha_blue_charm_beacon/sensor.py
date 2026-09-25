@@ -67,38 +67,31 @@ class BlueCharmBatterySensor(SensorEntity):
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Handle incoming Bluetooth advertisements and extract battery telemetry."""
+            """Handle incoming Bluetooth advertisements and parse Eddystone-TLM battery."""
             try:
-                # Check manufacturer data payloads
-                for m_id, m_data in service_info.manufacturer_data.items():
-                    hex_str = m_data.hex()
-                    # Look for BlueCharmBeacons signature to parse subsequent telemetry bytes
-                    if "426c7565436861726d426561636f6e73" in hex_str:
-                        # Blue Charm payload structure typically encodes voltage/battery indicators 
-                        # after the string signature. Let's inspect the last few bytes or fallback safely.
-                        # If a direct battery byte is present near the end or via TLM frames:
-                        if len(m_data) >= 2:
-                            # Example parsing: checking the last bytes or evaluating raw integers
-                            potential_battery = m_data[-1]
-                            if 0 <= potential_battery <= 100:
-                                self._attr_native_value = potential_battery
-                                self.async_write_ha_state()
-                                return
-
-                # Fallback: check service data for Eddystone-TLM (UUID feaa) if active on beacon
+                # Look through service data for Eddystone-TLM (UUID feaa)
                 for uuid, s_data in service_info.service_data.items():
-                    if "feaa" in uuid.lower() and len(s_data) >= 14:
-                        # Eddystone-TLM battery voltage is encoded in bytes 2 and 3 (in millivolts)
-                        voltage = int.from_bytes(s_data[2:4], byteorder="big")
-                        if voltage > 0:
-                            # Approximate conversion from mV (e.g., 3000mV = 100%, 2000mV = 0%)
-                            battery_pct = max(0, min(100, int((voltage - 2000) / 10)))
-                            self._attr_native_value = battery_pct
-                            self.async_write_ha_state()
-                            return
+                    if "feaa" in uuid.lower():
+                        # Convert bytes if s_data is bytes or hex string
+                        if isinstance(s_data, str):
+                            data_bytes = bytes.fromhex(s_data)
+                        else:
+                            data_bytes = s_data
 
+                        # Eddystone-TLM frame format:
+                        # Byte 0: TLM version (e.g. 0x20)
+                        # Bytes 1-2: Battery voltage in mV (big-endian unsigned short)
+                        if len(data_bytes) >= 4:
+                            voltage_mv = int.from_bytes(data_bytes[1:3], byteorder="big")
+                            if voltage_mv > 0:
+                                # Blue Charm coin cells typically range from ~2000mV (0%) to ~3000mV (100%)
+                                battery_pct = max(0, min(100, int((voltage_mv - 2000) / 10)))
+                                if self._attr_native_value != battery_pct:
+                                    self._attr_native_value = battery_pct
+                                    self.async_write_ha_state()
+                                    return
             except Exception as err:
-                _LOGGER.debug("Error parsing Blue Charm advertisement for battery: %s", err)
+                _LOGGER.debug("Error parsing Blue Charm TLM battery frame: %s", err)
 
         self.async_on_remove(
             async_register_callback(
