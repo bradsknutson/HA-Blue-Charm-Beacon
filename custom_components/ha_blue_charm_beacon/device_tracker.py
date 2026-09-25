@@ -7,6 +7,9 @@ from homeassistant.components.bluetooth import (
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
     async_register_callback,
+    async_address_present,
+    async_get_advertisement_data,
+    async_discovered_service_info,
 )
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
@@ -43,7 +46,6 @@ class BlueCharmTracker(TrackerEntity):
         self._address = address.lower()
         self._attr_unique_id = f"{address}_tracker"
         self._attr_source_type = SourceType.BLUETOOTH
-        # Start as connected/true so it doesn't show as completely dead on boot
         self._attr_is_connected = True
         
         self._attr_device_info = DeviceInfo(
@@ -62,8 +64,20 @@ class BlueCharmTracker(TrackerEntity):
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Update connection state and force state write when heard."""
+            """Update connection state and log core bluetooth status."""
             if service_info.address.lower() == self._address:
+                # Diagnostic core queries
+                is_present = async_address_present(self.hass, self._address, connectable=False)
+                adv_data = async_get_advertisement_data(self.hass, self._address)
+                all_discovered = [info.address for info in async_discovered_service_info(self.hass)]
+                
+                _LOGGER.error(
+                    "CORE_DIAGNOSTIC: address_present=%s | adv_data_found=%s | total_discovered_devices=%s",
+                    is_present,
+                    bool(adv_data),
+                    all_discovered,
+                )
+
                 if not self._attr_is_connected:
                     self._attr_is_connected = True
                     self.async_write_ha_state()
