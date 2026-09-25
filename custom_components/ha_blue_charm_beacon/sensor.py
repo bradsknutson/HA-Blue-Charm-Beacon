@@ -32,6 +32,7 @@ async def async_setup_entry(
     """Set up Blue Charm beacon sensor based on a config entry."""
     address = entry.data["address"]
     name = entry.data["name"]
+    _LOGGER.error("DEBUG_SETUP: Setting up sensor for address: %s", address)
     async_add_entities([BlueCharmBatterySensor(address, name)])
 
 
@@ -49,6 +50,7 @@ class BlueCharmBatterySensor(SensorEntity):
         """Initialize the battery sensor."""
         self._address = address.lower()
         self._attr_unique_id = f"{address}_battery"
+        self._attr_native_value = None
         
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
@@ -61,21 +63,29 @@ class BlueCharmBatterySensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
+        _LOGGER.error("DEBUG_CALLBACK: Registering listener for target: %s", self._address)
 
         @callback
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Catch advertisements and parse Eddystone-TLM battery voltage."""
+            """Catch advertisements and log everything."""
             if service_info.address.lower() == self._address:
+                _LOGGER.error(
+                    "MATCHED_PACKET! Heard address: %s | Service Data keys: %s",
+                    service_info.address,
+                    list(service_info.service_data.keys()),
+                )
+
                 try:
                     for uuid, s_data in service_info.service_data.items():
                         if "feaa" in uuid.lower():
                             data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
+                            _LOGGER.error("FULL_FEAA_HEX: %s", data_bytes.hex())
                             
-                            # Eddystone-TLM layout: Bytes 2-3 contain big-endian voltage in mV
                             if len(data_bytes) >= 4:
                                 voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
+                                _LOGGER.error("EXTRACTED_VOLTAGE: %d mV", voltage_mv)
                                 
                                 if voltage_mv > 2000:
                                     if voltage_mv >= 3000:
@@ -85,12 +95,13 @@ class BlueCharmBatterySensor(SensorEntity):
                                     else:
                                         battery_pct = int((voltage_mv - 2000) / 10)
 
+                                    _LOGGER.error("PARSED_BATTERY: Computed %d%%", battery_pct)
                                     if self._attr_native_value != battery_pct:
                                         self._attr_native_value = battery_pct
                                         self.async_write_ha_state()
                                         return
                 except Exception as err:
-                    _LOGGER.error("Error parsing Blue Charm TLM battery frame: %s", err, exc_info=True)
+                    _LOGGER.error("PARSER_ERROR: %s", err, exc_info=True)
 
         self.async_on_remove(
             async_register_callback(
