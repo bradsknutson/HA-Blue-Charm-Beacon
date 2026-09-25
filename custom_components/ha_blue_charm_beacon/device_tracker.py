@@ -78,13 +78,13 @@ class BlueCharmDeviceTracker(TrackerEntity):
                     self._attr_is_connected = True
                     self.async_write_ha_state()
 
-        # Register with the specific non-connectable matcher filter so core 
-        # binds the advertisement stream to the integration's device entry.
+        # Pass {"connectable": False} to opt-in to non-connectable beacon advertisements 
+        # while keeping our address filter inside the callback function body.
         self.async_on_remove(
             async_register_callback(
                 self.hass,
                 _handle_bluetooth,
-                {"address": self._address, "connectable": False},
+                {"connectable": False},
                 BluetoothScanningMode.ACTIVE,
             )
         )
