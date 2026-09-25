@@ -56,9 +56,9 @@ class BlueCharmBatterySensor(PassiveBluetoothProcessorEntity, SensorEntity):
     _attr_name = "Battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, processor: PassiveBluetoothDataProcessor, description) -> None:
+    def __init__(self, processor: PassiveBluetoothDataProcessor, entity_key: PassiveBluetoothEntityKey) -> None:
         """Initialize the battery sensor."""
-        super().__init__(processor)
+        super().__init__(processor, entity_key)
         address = self.coordinator.address
         name = self.coordinator.config_entry.data.get("name", "Blue Charm Beacon")
         
@@ -70,8 +70,3 @@ class BlueCharmBatterySensor(PassiveBluetoothProcessorEntity, SensorEntity):
             model="BLE Beacon",
             connections={(CONNECTION_BLUETOOTH, address.lower())},
         )
-
-    @property
-    def native_value(self):
-        """Return the native value of the sensor from the processor data."""
-        return self.processor.entity_data.get(self.entity_key)
