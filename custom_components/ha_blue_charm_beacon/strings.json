@@ -1,0 +1,20 @@
+{
+  "title": "HA Blue Charm Beacon",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure Blue Charm Beacon",
+        "description": "Enter the friendly name and Bluetooth MAC address of your cat's beacon.",
+        "data": {
+          "name": "Friendly Name",
+          "address": "Bluetooth Address"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Device is already configured",
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication"
+    }
+  }
+}
