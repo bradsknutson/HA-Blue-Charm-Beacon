@@ -7,7 +7,7 @@
   "documentation": "https://github.com/bradsknutson/HA-Blue-Charm-Beacon",
   "issue_tracker": "https://github.com/bradsknutson/HA-Blue-Charm-Beacon/issues",
   "iot_class": "local_push",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "bluetooth": [
     {
       "connectable": false

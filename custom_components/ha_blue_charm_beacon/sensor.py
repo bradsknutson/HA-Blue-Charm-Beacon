@@ -6,6 +6,7 @@ from homeassistant.components.bluetooth import (
     BluetoothChange,
     BluetoothScanningMode,
     BluetoothServiceInfoBleak,
+    async_ble_device_from_address,
     async_register_callback,
 )
 from homeassistant.components.sensor import (
@@ -32,7 +33,7 @@ async def async_setup_entry(
     """Set up Blue Charm beacon sensor based on a config entry."""
     address = entry.data["address"]
     name = entry.data["name"]
-    async_add_entities([BlueCharmBatterySensor(address, name)])
+    async_add_entities([BlueCharmBatterySensor(hass, address, name)])
 
 
 class BlueCharmBatterySensor(SensorEntity):
@@ -45,12 +46,13 @@ class BlueCharmBatterySensor(SensorEntity):
     _attr_name = "Battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, address: str, name: str) -> None:
+    def __init__(self, hass: HomeAssistant, address: str, name: str) -> None:
         """Initialize the battery sensor."""
+        self.hass = hass
         self._address = address
         self._attr_unique_id = f"{address}_battery"
         
-        # Link device to the integration domain and native bluetooth connection
+        # Link device securely to the bluetooth connection registry
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
             name=name,
@@ -63,32 +65,39 @@ class BlueCharmBatterySensor(SensorEntity):
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
 
+        # Check if advertisement cache already has a BLEDevice to bind immediately
+        ble_device = async_ble_device_from_address(self.hass, self._address)
+        if ble_device:
+            _LOGGER.debug("Found cached BLE device for %s during setup", self._address)
+
         @callback
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Handle incoming Bluetooth advertisements and parse Eddystone-TLM battery."""
+            """Handle incoming Bluetooth advertisements and parse Eddystone-TLM battery voltage."""
             try:
-                # Look through service data for Eddystone-TLM (UUID feaa)
+                # Scan service data for Eddystone-TLM (UUID feaa)
                 for uuid, s_data in service_info.service_data.items():
                     if "feaa" in uuid.lower():
-                        # Convert bytes if s_data is bytes or hex string
-                        if isinstance(s_data, str):
-                            data_bytes = bytes.fromhex(s_data)
-                        else:
-                            data_bytes = s_data
-
-                        # Eddystone-TLM frame format:
-                        # Byte 0: TLM version (e.g. 0x20)
-                        # Bytes 1-2: Battery voltage in mV (big-endian unsigned short)
-                        if len(data_bytes) >= 4:
+                        data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
+                        
+                        # Eddystone-TLM layout: [Frame Type (1byte), Voltage (2bytes), ...]
+                        if len(data_bytes) >= 3:
                             voltage_mv = int.from_bytes(data_bytes[1:3], byteorder="big")
+                            
                             if voltage_mv > 0:
-                                # Blue Charm coin cells typically range from ~2000mV (0%) to ~3000mV (100%)
-                                battery_pct = max(0, min(100, int((voltage_mv - 2000) / 10)))
+                                # Precise CR2032 scaling matching KBeacon app metrics (~2997mV = 99%)
+                                if voltage_mv >= 3000:
+                                    battery_pct = 100
+                                elif voltage_mv <= 2000:
+                                    battery_pct = 0
+                                else:
+                                    battery_pct = int((voltage_mv - 2000) / 10)
+
                                 if self._attr_native_value != battery_pct:
                                     self._attr_native_value = battery_pct
                                     self.async_write_ha_state()
+                                    _LOGGER.debug("Parsed Blue Charm battery: %d%% (%d mV)", battery_pct, voltage_mv)
                                     return
             except Exception as err:
                 _LOGGER.debug("Error parsing Blue Charm TLM battery frame: %s", err)
