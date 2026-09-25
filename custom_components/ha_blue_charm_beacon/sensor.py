@@ -82,7 +82,7 @@ class BlueCharmBatterySensor(SensorEntity):
             async_register_callback(
                 self.hass,
                 _handle_bluetooth,
-                {"address": self._address},
+                {"address": self._address.lower()},
                 BluetoothScanningMode.ACTIVE,
             )
         )
