@@ -17,6 +17,19 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 
+def parse_blue_charm_advertisement(service_info):
+    """Parse advertisement packets via coordinator."""
+    for uuid, s_data in service_info.service_data.items():
+        if "feaa" in uuid.lower():
+            data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
+            if len(data_bytes) >= 4:
+                voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
+                if voltage_mv > 2000:
+                    battery_pct = 100 if voltage_mv >= 3000 else int((voltage_mv - 2000) / 10)
+                    return {"battery": battery_pct}
+    return {}
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Blue Charm Beacon from a config entry."""
     address = entry.data["address"]
