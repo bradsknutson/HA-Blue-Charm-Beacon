@@ -68,6 +68,11 @@ class BlueCharmDeviceTracker(TrackerEntity):
         ) -> None:
             """Mark as connected/home when a packet is heard from this MAC."""
             if service_info.address.lower() == self._address:
+                _LOGGER.error(
+                    "TRACKER_SOURCE_CHECK: Heard on adapter/source: %s with RSSI: %s",
+                    getattr(service_info, "source", "unknown"),
+                    getattr(service_info, "rssi", "unknown"),
+                )
                 if not self._attr_is_connected:
                     self._attr_is_connected = True
                     self.async_write_ha_state()
