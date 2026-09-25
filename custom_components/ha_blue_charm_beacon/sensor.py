@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import logging
-
-from homeassistant.components.bluetooth import (
-    BluetoothChange,
-    BluetoothScanningMode,
-    BluetoothServiceInfoBleak,
-    async_register_callback,
+from homeassistant.components.bluetooth.passive_update_processor import (
+    PassiveBluetoothDataProcessor,
+    PassiveBluetoothDataUpdate,
+    PassiveBluetoothEntityKey,
+    PassiveBluetoothProcessorEntity,
 )
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -15,13 +13,33 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 
-_LOGGER = logging.getLogger(__name__)
+
+def parse_blue_charm_advertisement(service_info):
+    """Parse advertisement packets via coordinator."""
+    # Extract Eddystone-TLM voltage as before
+    for uuid, s_data in service_info.service_data.items():
+        if "feaa" in uuid.lower():
+            data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
+            if len(data_bytes) >= 4:
+                voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
+                if voltage_mv > 2000:
+                    battery_pct = 100 if voltage_mv >= 3000 else int((voltage_mv - 2000) / 10)
+                    return {"battery": battery_pct}
+    return {}
+
+
+def sensor_update_to_bluetooth_data_update(parsed_data: dict) -> PassiveBluetoothDataUpdate:
+    """Map parsed data to Home Assistant Bluetooth entities."""
+    return PassiveBluetoothDataUpdate(
+        entity_data={
+            PassiveBluetoothEntityKey("battery", "battery"): parsed_data.get("battery")
+        },
+    )
 
 
 async def async_setup_entry(
@@ -29,15 +47,16 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Blue Charm beacon sensor based on a config entry."""
-    address = entry.data["address"]
-    name = entry.data["name"]
-    _LOGGER.error("DEBUG_SETUP: Setting up Blue Charm sensor for address: %s", address)
-    async_add_entities([BlueCharmBatterySensor(address, name)])
+    """Set up Blue Charm beacon sensor using the coordinator processor."""
+    coordinator = entry.runtime_data
+    processor = PassiveBluetoothDataProcessor(sensor_update_to_bluetooth_data_update)
+    
+    entry.async_on_unload(processor.async_add_entities_listener(BlueCharmBatterySensor, async_add_entities))
+    entry.async_on_unload(coordinator.async_register_processor(processor))
 
 
-class BlueCharmBatterySensor(SensorEntity):
-    """Representation of a Blue Charm Beacon Battery Sensor."""
+class BlueCharmBatterySensor(PassiveBluetoothProcessorEntity, SensorEntity):
+    """Representation of a Blue Charm Beacon Battery Sensor via Bluetooth Coordinator."""
 
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -46,63 +65,7 @@ class BlueCharmBatterySensor(SensorEntity):
     _attr_name = "Battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, address: str, name: str) -> None:
-        """Initialize the battery sensor."""
-        self._address = address.lower()
-        self._attr_unique_id = f"{address}_battery"
-        
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="Blue Charm",
-            model="BLE Beacon",
-            connections={(CONNECTION_BLUETOOTH, address.lower())},
-        )
-
-    async def async_added_to_hass(self) -> None:
-        """Register callbacks when entity is added to hass."""
-        await super().async_added_to_hass()
-        _LOGGER.error("DEBUG_CALLBACK: Registering global bluetooth listener for target: %s", self._address)
-
-        @callback
-        def _handle_bluetooth(
-            service_info: BluetoothServiceInfoBleak, change: BluetoothChange
-        ) -> None:
-            """Catch all advertisements and check if it matches our beacon."""
-            if service_info.address.lower() == self._address:
-                try:
-                    for uuid, s_data in service_info.service_data.items():
-                        if "feaa" in uuid.lower():
-                            data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
-                            
-                            # Print the exact hex representation to the logs for validation
-                            _LOGGER.error("FULL_FEAA_HEX: %s", data_bytes.hex())
-
-                            # Eddystone-TLM layout: Bytes 2-3 contain big-endian voltage in mV
-                            if len(data_bytes) >= 4:
-                                voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
-                                
-                                if voltage_mv > 2000:
-                                    if voltage_mv >= 3000:
-                                        battery_pct = 100
-                                    elif voltage_mv <= 2000:
-                                        battery_pct = 0
-                                    else:
-                                        battery_pct = int((voltage_mv - 2000) / 10)
-
-                                    _LOGGER.error("PARSED_BATTERY: Successfully computed %d%% from %d mV", battery_pct, voltage_mv)
-                                    if self._attr_native_value != battery_pct:
-                                        self._attr_native_value = battery_pct
-                                        self.async_write_ha_state()
-                                        return
-                except Exception as err:
-                    _LOGGER.error("PARSER_ERROR: %s", err, exc_info=True)
-
-        self.async_on_remove(
-            async_register_callback(
-                self.hass,
-                _handle_bluetooth,
-                None,
-                BluetoothScanningMode.ACTIVE,
-            )
-        )
+    @property
+    def native_value(self):
+        """Return the native value of the sensor."""
+        return self.processor.entity_data.get(self.entity_key)
