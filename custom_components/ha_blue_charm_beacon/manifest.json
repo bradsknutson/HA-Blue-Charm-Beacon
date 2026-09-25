@@ -10,8 +10,7 @@
   "version": "1.1.0",
   "bluetooth": [
       {
-        "service_uuid": "0000feaa-0000-1000-8000-00805f9b34fb",
-        "connectable": false
+        "service_uuid": "0000feaa-0000-1000-8000-00805f9b34fb"
       }
     ],
   "logo": "https://raw.githubusercontent.com/bradsknutson/HA-Blue-Charm-Beacon/main/custom_components/ha_blue_charm_beacon/brand/logo.png",
