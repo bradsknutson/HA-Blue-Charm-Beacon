@@ -8,7 +8,6 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_register_callback,
 )
-from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -30,15 +29,10 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Blue Charm beacon sensor and device tracker based on a config entry."""
+    """Set up Blue Charm beacon sensor based on a config entry."""
     address = entry.data["address"]
     name = entry.data.get("name", "Blue Charm Beacon")
-    _LOGGER.error("DEBUG_SETUP: Setting up entities for address: %s", address)
-    
-    battery_sensor = BlueCharmBatterySensor(address, name)
-    device_tracker = BlueCharmDeviceTracker(address, name)
-    
-    async_add_entities([battery_sensor, device_tracker])
+    async_add_entities([BlueCharmBatterySensor(address, name)])
 
 
 class BlueCharmBatterySensor(SensorEntity):
@@ -95,57 +89,6 @@ class BlueCharmBatterySensor(SensorEntity):
                                     return
                 except Exception as err:
                     _LOGGER.error("PARSER_ERROR: %s", err, exc_info=True)
-
-        self.async_on_remove(
-            async_register_callback(
-                self.hass,
-                _handle_bluetooth,
-                None,
-                BluetoothScanningMode.ACTIVE,
-            )
-        )
-
-
-class BlueCharmDeviceTracker(TrackerEntity):
-    """Representation of a Blue Charm Beacon Device Tracker."""
-
-    _attr_has_entity_name = True
-    _attr_name = None  
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, address: str, name: str) -> None:
-        """Initialize the device tracker."""
-        self._address = address.lower()
-        self._attr_unique_id = f"{address}_tracker"
-        self._attr_source_type = SourceType.BLUETOOTH
-        self._attr_is_connected = True
-        
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="Blue Charm",
-            model="BLE Beacon",
-            connections={(CONNECTION_BLUETOOTH, address.lower())},
-        )
-
-    @property
-    def state(self) -> str:
-        """Return the state of the device tracker."""
-        return "home" if self._attr_is_connected else "not_home"
-
-    async def async_added_to_hass(self) -> None:
-        """Register callbacks when entity is added to hass."""
-        await super().async_added_to_hass()
-
-        @callback
-        def _handle_bluetooth(
-            service_info: BluetoothServiceInfoBleak, change: BluetoothChange
-        ) -> None:
-            """Mark as connected when any packet is heard from this MAC."""
-            if service_info.address.lower() == self._address:
-                if not self._attr_is_connected:
-                    self._attr_is_connected = True
-                    self.async_write_ha_state()
 
         self.async_on_remove(
             async_register_callback(

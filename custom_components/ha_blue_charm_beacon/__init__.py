@@ -10,13 +10,11 @@ from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.DEVICE_TRACKER]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Blue Charm Beacon from a config entry."""
-    address = entry.data["address"]
-    
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
