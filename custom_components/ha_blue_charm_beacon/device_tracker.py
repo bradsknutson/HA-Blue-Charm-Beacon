@@ -72,12 +72,12 @@ class BlueCharmDeviceTracker(TrackerEntity):
                     self._attr_is_connected = True
                     self.async_write_ha_state()
 
-        # Register the active callback which binds this listener to core's bluetooth tracking
+        # Revert matcher to None so the callback streams packets reliably
         self.async_on_remove(
             async_register_callback(
                 self.hass,
                 _handle_bluetooth,
-                {"address": self._address},
+                None,
                 BluetoothScanningMode.ACTIVE,
             )
         )
