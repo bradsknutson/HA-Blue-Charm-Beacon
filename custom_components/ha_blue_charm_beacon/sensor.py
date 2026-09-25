@@ -8,6 +8,7 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_register_callback,
 )
+from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -29,11 +30,15 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Blue Charm beacon sensor based on a config entry."""
+    """Set up Blue Charm beacon sensor and device tracker based on a config entry."""
     address = entry.data["address"]
     name = entry.data.get("name", "Blue Charm Beacon")
-    _LOGGER.error("DEBUG_SETUP: Setting up sensor for address: %s", address)
-    async_add_entities([BlueCharmBatterySensor(address, name)])
+    _LOGGER.error("DEBUG_SETUP: Setting up entities for address: %s", address)
+    
+    battery_sensor = BlueCharmBatterySensor(address, name)
+    device_tracker = BlueCharmDeviceTracker(address, name)
+    
+    async_add_entities([battery_sensor, device_tracker])
 
 
 class BlueCharmBatterySensor(SensorEntity):
@@ -50,7 +55,6 @@ class BlueCharmBatterySensor(SensorEntity):
         """Initialize the battery sensor."""
         self._address = address.lower()
         self._attr_unique_id = f"{address}_battery"
-        # Setting a starting value so it doesn't default to Unavailable/Unknown
         self._attr_native_value = 0 
         
         self._attr_device_info = DeviceInfo(
@@ -64,30 +68,19 @@ class BlueCharmBatterySensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Register callbacks when entity is added to hass."""
         await super().async_added_to_hass()
-        _LOGGER.error("DEBUG_CALLBACK: Registering listener for target: %s", self._address)
 
         @callback
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Catch advertisements and log everything."""
+            """Catch advertisements and parse battery."""
             if service_info.address.lower() == self._address:
-                _LOGGER.error(
-                    "MATCHED_PACKET! Heard address: %s | Service Data keys: %s",
-                    service_info.address,
-                    list(service_info.service_data.keys()),
-                )
-
                 try:
                     for uuid, s_data in service_info.service_data.items():
                         if "feaa" in uuid.lower():
                             data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
-                            _LOGGER.error("FULL_FEAA_HEX: %s", data_bytes.hex())
-                            
                             if len(data_bytes) >= 4:
                                 voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
-                                _LOGGER.error("EXTRACTED_VOLTAGE: %d mV", voltage_mv)
-                                
                                 if voltage_mv > 2000:
                                     if voltage_mv >= 3000:
                                         battery_pct = 100
@@ -96,13 +89,63 @@ class BlueCharmBatterySensor(SensorEntity):
                                     else:
                                         battery_pct = int((voltage_mv - 2000) / 10)
 
-                                    _LOGGER.error("PARSED_BATTERY: Computed %d%%", battery_pct)
                                     if self._attr_native_value != battery_pct:
                                         self._attr_native_value = battery_pct
                                         self.async_write_ha_state()
                                     return
                 except Exception as err:
                     _LOGGER.error("PARSER_ERROR: %s", err, exc_info=True)
+
+        self.async_on_remove(
+            async_register_callback(
+                self.hass,
+                _handle_bluetooth,
+                None,
+                BluetoothScanningMode.ACTIVE,
+            )
+        )
+
+
+class BlueCharmDeviceTracker(TrackerEntity):
+    """Representation of a Blue Charm Beacon Device Tracker."""
+
+    _attr_has_entity_name = True
+    _attr_name = None  
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, address: str, name: str) -> None:
+        """Initialize the device tracker."""
+        self._address = address.lower()
+        self._attr_unique_id = f"{address}_tracker"
+        self._attr_source_type = SourceType.BLUETOOTH
+        self._attr_is_connected = True
+        
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name=name,
+            manufacturer="Blue Charm",
+            model="BLE Beacon",
+            connections={(CONNECTION_BLUETOOTH, address.lower())},
+        )
+
+    @property
+    def state(self) -> str:
+        """Return the state of the device tracker."""
+        return "home" if self._attr_is_connected else "not_home"
+
+    async def async_added_to_hass(self) -> None:
+        """Register callbacks when entity is added to hass."""
+        await super().async_added_to_hass()
+
+        @callback
+        def _handle_bluetooth(
+            service_info: BluetoothServiceInfoBleak, change: BluetoothChange
+        ) -> None:
+            """Mark as connected when any packet is heard from this MAC."""
+            if service_info.address.lower() == self._address:
+                if not self._attr_is_connected:
+                    self._attr_is_connected = True
+                    self.async_write_ha_state()
 
         self.async_on_remove(
             async_register_callback(
