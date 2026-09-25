@@ -34,7 +34,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Blue Charm Beacon from a config entry."""
     address = entry.data["address"]
     
-    # This core coordinator registers the device with Home Assistant's Bluetooth map & tables
     coordinator = PassiveBluetoothProcessorCoordinator(
         hass,
         _LOGGER,
@@ -45,6 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(coordinator.async_start())
     return True
 
 

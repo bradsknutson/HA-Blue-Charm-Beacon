@@ -19,20 +19,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from .const import DOMAIN
 
 
-def parse_blue_charm_advertisement(service_info):
-    """Parse advertisement packets via coordinator."""
-    # Extract Eddystone-TLM voltage as before
-    for uuid, s_data in service_info.service_data.items():
-        if "feaa" in uuid.lower():
-            data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
-            if len(data_bytes) >= 4:
-                voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
-                if voltage_mv > 2000:
-                    battery_pct = 100 if voltage_mv >= 3000 else int((voltage_mv - 2000) / 10)
-                    return {"battery": battery_pct}
-    return {}
-
-
 def sensor_update_to_bluetooth_data_update(parsed_data: dict) -> PassiveBluetoothDataUpdate:
     """Map parsed data to Home Assistant Bluetooth entities."""
     return PassiveBluetoothDataUpdate(
