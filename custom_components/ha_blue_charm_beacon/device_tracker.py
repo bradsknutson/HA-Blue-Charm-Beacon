@@ -62,12 +62,13 @@ class BlueCharmTracker(TrackerEntity):
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Update connection state and log core bluetooth status."""
+            """Update connection state and check core tracking presence."""
             if service_info.address.lower() == self._address:
                 is_present = async_address_present(self.hass, self._address, connectable=False)
                 
-                _LOGGER.error(
-                    "CORE_DIAGNOSTIC: address_present=%s | service_info_received=True",
+                _LOGGER.debug(
+                    "TRACKER_DIAGNOSTIC: address %s present in core manager: %s",
+                    self._address,
                     is_present,
                 )
 
