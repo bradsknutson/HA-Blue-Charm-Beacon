@@ -23,7 +23,7 @@ def sensor_update_to_bluetooth_data_update(parsed_data: dict) -> PassiveBluetoot
     """Map parsed data to Home Assistant Bluetooth entities."""
     return PassiveBluetoothDataUpdate(
         entity_data={
-            PassiveBluetoothEntityKey("battery", "battery"): parsed_data.get("battery")
+            PassiveBluetoothEntityKey("battery", None): parsed_data.get("battery")
         },
     )
 
