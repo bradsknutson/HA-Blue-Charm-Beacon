@@ -35,7 +35,7 @@ class BlueCharmTracker(TrackerEntity):
     """Representation of a Blue Charm Beacon Tracker."""
 
     _attr_has_entity_name = True
-    _attr_name = None  # Main device entity name
+    _attr_name = None  
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(self, address: str, name: str) -> None:
@@ -43,6 +43,7 @@ class BlueCharmTracker(TrackerEntity):
         self._address = address.lower()
         self._attr_unique_id = f"{address}_tracker"
         self._attr_source_type = SourceType.BLUETOOTH
+        # Start as connected/true so it doesn't show as completely dead on boot
         self._attr_is_connected = True
         
         self._attr_device_info = DeviceInfo(
@@ -61,11 +62,11 @@ class BlueCharmTracker(TrackerEntity):
         def _handle_bluetooth(
             service_info: BluetoothServiceInfoBleak, change: BluetoothChange
         ) -> None:
-            """Update connection state when an advertisement is heard."""
+            """Update connection state and force state write when heard."""
             if service_info.address.lower() == self._address:
-                # Mark as seen/connected whenever a packet arrives
-                self._attr_is_connected = True
-                self.async_write_ha_state()
+                if not self._attr_is_connected:
+                    self._attr_is_connected = True
+                    self.async_write_ha_state()
 
         self.async_on_remove(
             async_register_callback(
