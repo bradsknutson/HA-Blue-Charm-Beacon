@@ -9,10 +9,15 @@
   "iot_class": "local_push",
   "version": "1.1.0",
   "bluetooth": [
-      {
-        "service_uuid": "0000feaa-0000-1000-8000-00805f9b34fb"
-      }
-    ],
+    {
+      "service_uuid": "0000feaa-0000-1000-8000-00805f9b34fb",
+      "connectable": false
+    },
+    {
+      "manufacturer_id": 76,
+      "connectable": false
+    }
+  ],
   "logo": "https://raw.githubusercontent.com/bradsknutson/HA-Blue-Charm-Beacon/main/custom_components/ha_blue_charm_beacon/brand/logo.png",
-  "icon": "https://raw.githubusercontent.com/bradsknutson/HA-Blue-Charm-Beacon/main/custom_components/ha_blue_charm_beacon/brand/icon.png"
+  "icon": "https://raw.githubusercontent.com/bradsknutson/HA-Blue-Charm-beacon/main/custom_components/ha_blue_charm_beacon/brand/icon.png"
 }
