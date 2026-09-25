@@ -68,16 +68,23 @@ class BlueCharmDeviceTracker(TrackerEntity):
         ) -> None:
             """Mark as connected/home when a packet is heard from this MAC."""
             if service_info.address.lower() == self._address:
+                _LOGGER.error(
+                    "TRACKER_MATCHED: Heard beacon %s on adapter %s with RSSI %s",
+                    service_info.address,
+                    getattr(service_info, "source", "unknown"),
+                    getattr(service_info, "rssi", "unknown"),
+                )
                 if not self._attr_is_connected:
                     self._attr_is_connected = True
                     self.async_write_ha_state()
 
-        # Revert matcher to None so the callback streams packets reliably
+        # Register with the specific non-connectable matcher filter so core 
+        # binds the advertisement stream to the integration's device entry.
         self.async_on_remove(
             async_register_callback(
                 self.hass,
                 _handle_bluetooth,
-                None,
+                {"address": self._address, "connectable": False},
                 BluetoothScanningMode.ACTIVE,
             )
         )
