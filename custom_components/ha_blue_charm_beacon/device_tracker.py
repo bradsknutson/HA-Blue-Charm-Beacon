@@ -8,8 +8,6 @@ from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_register_callback,
     async_address_present,
-    async_get_advertisement_data,
-    async_discovered_service_info,
 )
 from homeassistant.components.device_tracker import SourceType, TrackerEntity
 from homeassistant.config_entries import ConfigEntry
@@ -66,16 +64,11 @@ class BlueCharmTracker(TrackerEntity):
         ) -> None:
             """Update connection state and log core bluetooth status."""
             if service_info.address.lower() == self._address:
-                # Diagnostic core queries
                 is_present = async_address_present(self.hass, self._address, connectable=False)
-                adv_data = async_get_advertisement_data(self.hass, self._address)
-                all_discovered = [info.address for info in async_discovered_service_info(self.hass)]
                 
                 _LOGGER.error(
-                    "CORE_DIAGNOSTIC: address_present=%s | adv_data_found=%s | total_discovered_devices=%s",
+                    "CORE_DIAGNOSTIC: address_present=%s | service_info_received=True",
                     is_present,
-                    bool(adv_data),
-                    all_discovered,
                 )
 
                 if not self._attr_is_connected:
