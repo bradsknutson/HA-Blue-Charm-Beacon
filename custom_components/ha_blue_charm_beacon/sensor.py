@@ -50,7 +50,8 @@ class BlueCharmBatterySensor(SensorEntity):
         """Initialize the battery sensor."""
         self._address = address.lower()
         self._attr_unique_id = f"{address}_battery"
-        self._attr_native_value = None
+        # Setting a starting value so it doesn't default to Unavailable/Unknown
+        self._attr_native_value = 0 
         
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
@@ -99,7 +100,7 @@ class BlueCharmBatterySensor(SensorEntity):
                                     if self._attr_native_value != battery_pct:
                                         self._attr_native_value = battery_pct
                                         self.async_write_ha_state()
-                                        return
+                                    return
                 except Exception as err:
                     _LOGGER.error("PARSER_ERROR: %s", err, exc_info=True)
 
