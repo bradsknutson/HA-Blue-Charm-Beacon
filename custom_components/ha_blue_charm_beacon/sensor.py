@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.bluetooth import (
-    BluetoothChange,
-    BluetoothScanningMode,
-    BluetoothServiceInfoBleak,
-    async_register_callback,
+from homeassistant.components.bluetooth.passive_update_processor import (
+    PassiveBluetoothDataProcessor,
+    PassiveBluetoothDataUpdate,
+    PassiveBluetoothEntityKey,
+    PassiveBluetoothProcessorEntity,
 )
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -15,7 +15,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import CONNECTION_BLUETOOTH, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -24,20 +24,30 @@ from .const import DOMAIN
 _LOGGER = logging.getLogger(__name__)
 
 
+def sensor_update_to_bluetooth_data_update(parsed_data: dict) -> PassiveBluetoothDataUpdate:
+    """Map parsed data dictionary to Home Assistant Bluetooth entities."""
+    return PassiveBluetoothDataUpdate(
+        entity_data={
+            PassiveBluetoothEntityKey("battery", None): parsed_data.get("battery")
+        },
+    )
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Blue Charm beacon sensor based on a config entry."""
-    address = entry.data["address"]
-    name = entry.data["name"]
-    _LOGGER.error("DEBUG_SETUP: Setting up sensor for address: %s", address)
-    async_add_entities([BlueCharmBatterySensor(address, name)])
+    """Set up Blue Charm beacon sensor using the coordinator processor."""
+    coordinator = entry.runtime_data
+    processor = PassiveBluetoothDataProcessor(sensor_update_to_bluetooth_data_update)
+    
+    entry.async_on_unload(processor.async_add_entities_listener(BlueCharmBatterySensor, async_add_entities))
+    entry.async_on_unload(coordinator.async_register_processor(processor))
 
 
-class BlueCharmBatterySensor(SensorEntity):
-    """Representation of a Blue Charm Beacon Battery Sensor."""
+class BlueCharmBatterySensor(PassiveBluetoothProcessorEntity, SensorEntity):
+    """Representation of a Blue Charm Beacon Battery Sensor via Bluetooth Coordinator."""
 
     _attr_device_class = SensorDeviceClass.BATTERY
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -46,12 +56,13 @@ class BlueCharmBatterySensor(SensorEntity):
     _attr_name = "Battery"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 
-    def __init__(self, address: str, name: str) -> None:
+    def __init__(self, processor: PassiveBluetoothDataProcessor, description) -> None:
         """Initialize the battery sensor."""
-        self._address = address.lower()
-        self._attr_unique_id = f"{address}_battery"
-        self._attr_native_value = None
+        super().__init__(processor)
+        address = self.coordinator.address
+        name = self.coordinator.config_entry.data.get("name", "Blue Charm Beacon")
         
+        self._attr_unique_id = f"{address}_battery"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},
             name=name,
@@ -60,54 +71,7 @@ class BlueCharmBatterySensor(SensorEntity):
             connections={(CONNECTION_BLUETOOTH, address.lower())},
         )
 
-    async def async_added_to_hass(self) -> None:
-        """Register callbacks when entity is added to hass."""
-        await super().async_added_to_hass()
-        _LOGGER.error("DEBUG_CALLBACK: Registering listener for target: %s", self._address)
-
-        @callback
-        def _handle_bluetooth(
-            service_info: BluetoothServiceInfoBleak, change: BluetoothChange
-        ) -> None:
-            """Catch advertisements and log everything."""
-            if service_info.address.lower() == self._address:
-                _LOGGER.error(
-                    "MATCHED_PACKET! Heard address: %s | Service Data keys: %s",
-                    service_info.address,
-                    list(service_info.service_data.keys()),
-                )
-
-                try:
-                    for uuid, s_data in service_info.service_data.items():
-                        if "feaa" in uuid.lower():
-                            data_bytes = bytes.fromhex(s_data) if isinstance(s_data, str) else s_data
-                            _LOGGER.error("FULL_FEAA_HEX: %s", data_bytes.hex())
-                            
-                            if len(data_bytes) >= 4:
-                                voltage_mv = int.from_bytes(data_bytes[2:4], byteorder="big")
-                                _LOGGER.error("EXTRACTED_VOLTAGE: %d mV", voltage_mv)
-                                
-                                if voltage_mv > 2000:
-                                    if voltage_mv >= 3000:
-                                        battery_pct = 100
-                                    elif voltage_mv <= 2000:
-                                        battery_pct = 0
-                                    else:
-                                        battery_pct = int((voltage_mv - 2000) / 10)
-
-                                    _LOGGER.error("PARSED_BATTERY: Computed %d%%", battery_pct)
-                                    if self._attr_native_value != battery_pct:
-                                        self._attr_native_value = battery_pct
-                                        self.async_write_ha_state()
-                                        return
-                except Exception as err:
-                    _LOGGER.error("PARSER_ERROR: %s", err, exc_info=True)
-
-        self.async_on_remove(
-            async_register_callback(
-                self.hass,
-                _handle_bluetooth,
-                None,
-                BluetoothScanningMode.ACTIVE,
-            )
-        )
+    @property
+    def native_value(self):
+        """Return the native value of the sensor from the processor data."""
+        return self.processor.entity_data.get(self.entity_key)
